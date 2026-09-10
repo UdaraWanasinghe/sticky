@@ -57,6 +57,7 @@ export class Window extends Adw.ApplicationWindow {
 
   note: Note;
   deleted = false;
+  cursor_scroll_source: number | null = null;
 
   static {
     GObject.registerClass(
@@ -174,16 +175,11 @@ export class Window extends Adw.ApplicationWindow {
     });
 
     this._text.buffer = this.view.buffer;
-    this.view.buffer.connect("notify::cursor-position", (buffer) => {
-      const height = this._text.get_allocated_height();
-      if (height <= 0) return;
-
-      const margin = Math.min(
-        0.49,
-        Math.max(this._text.top_margin, this._text.bottom_margin) / height,
-      );
-      this._text.scroll_to_mark(buffer.get_insert(), margin, false, 0, 0);
-    });
+    this.view.buffer.connect(
+      "notify::cursor-position",
+      this.queue_cursor_scroll.bind(this),
+    );
+    this.view.buffer.connect("changed", this.queue_cursor_scroll.bind(this));
 
     this.add_actions();
 
@@ -197,29 +193,38 @@ export class Window extends Adw.ApplicationWindow {
     popover.add_child(this.selector, "notestyleswitcher");
   }
 
-  /**
-   * The title shown in the header bar and the window manager, which is the
-   * note's own title when it has one, and one derived from its content
-   * otherwise.
-   */
-  get display_title() {
-    return this.note.display_title || _("Sticky Note");
+  queue_cursor_scroll() {
+    if (this.cursor_scroll_source !== null) return;
+
+    this.cursor_scroll_source = GLib.idle_add(
+      GLib.PRIORITY_DEFAULT_IDLE,
+      () => {
+        this.cursor_scroll_source = null;
+        this.scroll_cursor_into_view();
+        return GLib.SOURCE_REMOVE;
+      },
+    );
   }
 
-  /**
-   * Gives the note the title left in the header bar, or takes its title away
-   * when the label was emptied, letting it follow the content again.
-   *
-   * The label shows the derived title of an untitled note, so text that was
-   * left as it was found means the note keeps having no title of its own.
-   */
-  rename(text: string) {
-    const title = text.trim();
+  scroll_cursor_into_view() {
+    const cursor = this.view.buffer.get_iter_at_mark(
+      this.view.buffer.get_insert(),
+    );
+    const cursor_rect = this._text.get_iter_location(cursor);
+    const visible_rect = this._text.get_visible_rect();
+    const visible_top = visible_rect.y + this._text.top_margin;
+    const visible_bottom = visible_rect.y + visible_rect.height -
+      this._text.bottom_margin;
 
-    if (title === this.display_title) return;
+    let offset = 0;
+    if (cursor_rect.y < visible_top) {
+      offset = cursor_rect.y - visible_top;
+    } else if (cursor_rect.y + cursor_rect.height > visible_bottom) {
+      offset = cursor_rect.y + cursor_rect.height - visible_bottom;
+    }
 
-    this.note.title = title;
-    this.note.modified_date = new Date();
+    if (offset === 0) return;
+    this._text.vadjustment.value += offset;
   }
 
   last_revealer = false;
