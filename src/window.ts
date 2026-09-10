@@ -174,9 +174,7 @@ export class Window extends Adw.ApplicationWindow {
     });
 
     this._text.buffer = this.view.buffer;
-    this.view.buffer.connect_after("mark-set", (_buffer, _loc, mark) => {
-      if (mark.name !== "insert") return;
-
+    this.view.buffer.connect("notify::cursor-position", (buffer) => {
       const height = this._text.get_allocated_height();
       if (height <= 0) return;
 
@@ -184,7 +182,7 @@ export class Window extends Adw.ApplicationWindow {
         0.49,
         Math.max(this._text.top_margin, this._text.bottom_margin) / height,
       );
-      this._text.scroll_to_mark(mark, margin, false, 0, 0);
+      this._text.scroll_to_mark(buffer.get_insert(), margin, false, 0, 0);
     });
 
     this.add_actions();
