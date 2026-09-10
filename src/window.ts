@@ -174,19 +174,17 @@ export class Window extends Adw.ApplicationWindow {
     });
 
     this._text.buffer = this.view.buffer;
-    this.view.attach_checkbox_gesture(this._text);
-    this.view.buffer.connect_after("insert-text", (buffer, _loc, text) => {
-      if (text !== "\n") return;
+    this.view.buffer.connect_after("mark-set", (_buffer, _loc, mark) => {
+      if (mark.name !== "insert") return;
 
-      const insert = buffer.get_insert();
-      const cursor = buffer.get_iter_at_mark(insert);
-      if (cursor.get_line() !== buffer.get_line_count() - 1) return;
+      const height = this._text.get_allocated_height();
+      if (height <= 0) return;
 
-      GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-        const adjustment = this._text.vadjustment;
-        adjustment.value = adjustment.upper - adjustment.page_size;
-        return GLib.SOURCE_REMOVE;
-      });
+      const margin = Math.min(
+        0.49,
+        Math.max(this._text.top_margin, this._text.bottom_margin) / height,
+      );
+      this._text.scroll_to_mark(mark, margin, false, 0, 0);
     });
 
     this.add_actions();
