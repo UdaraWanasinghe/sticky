@@ -58,6 +58,7 @@ export class Window extends Adw.ApplicationWindow {
   note: Note;
   deleted = false;
   cursor_scroll_source: number | null = null;
+  last_revealer = false;
 
   static {
     GObject.registerClass(
@@ -132,6 +133,8 @@ export class Window extends Adw.ApplicationWindow {
     });
 
     this.connect("close-request", () => {
+      this.cancel_cursor_scroll();
+
       if (this.deleted) return;
 
       // a note that was given a title is worth keeping even while it is empty
@@ -153,6 +156,7 @@ export class Window extends Adw.ApplicationWindow {
         this.note.height = height;
       }
     });
+    this.connect("unrealize", this.cancel_cursor_scroll.bind(this));
 
     this.set_style(note.style, true);
 
@@ -194,7 +198,7 @@ export class Window extends Adw.ApplicationWindow {
   }
 
   queue_cursor_scroll() {
-    if (this.cursor_scroll_source !== null) return;
+    if (!this.get_realized() || this.cursor_scroll_source !== null) return;
 
     this.cursor_scroll_source = GLib.idle_add(
       GLib.PRIORITY_DEFAULT_IDLE,
@@ -204,6 +208,13 @@ export class Window extends Adw.ApplicationWindow {
         return GLib.SOURCE_REMOVE;
       },
     );
+  }
+
+  cancel_cursor_scroll() {
+    if (this.cursor_scroll_source === null) return;
+
+    GLib.source_remove(this.cursor_scroll_source);
+    this.cursor_scroll_source = null;
   }
 
   scroll_cursor_into_view() {
@@ -227,12 +238,14 @@ export class Window extends Adw.ApplicationWindow {
     this._text.vadjustment.value += offset;
   }
 
-  last_revealer = false;
-
   update_link(selected: boolean, text: string) {
     if (selected) {
-      const href = find(text)[0].href;
-      this._action_button.action_target = GLib.Variant.new_string(href);
+      const link = find(text)[0];
+      if (link) {
+        this._action_button.action_target = GLib.Variant.new_string(link.href);
+      } else {
+        selected = false;
+      }
     }
 
     if (this.last_revealer === selected) return;
