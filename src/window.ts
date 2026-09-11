@@ -179,6 +179,7 @@ export class Window extends Adw.ApplicationWindow {
     });
 
     this._text.buffer = this.view.buffer;
+    this.view.attach_checkbox_gesture(this._text);
     this.view.buffer.connect(
       "notify::cursor-position",
       this.queue_cursor_scroll.bind(this),
